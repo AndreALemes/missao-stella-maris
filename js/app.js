@@ -113,6 +113,9 @@
     if (!pool.length) { // todos já vistos recentemente: usa os menos vistos
       pool = BANK.filter(function (q) { return q.t === t && (opt.exclude || []).indexOf(q.id) < 0 && (!opt.txt || q.txt === opt.txt); });
       if (!pool.length && hasGen) return shuffledQ(generateQuestion(t, d || 2));
+      // acabaram as questões inéditas: reaproveita as menos vistas (só nunca repete as de opt.hard, ex.: o próprio simulado)
+      if (!pool.length) pool = BANK.filter(function (q) { return q.t === t && (opt.hard || []).indexOf(q.id) < 0 && (!opt.txt || q.txt === opt.txt); });
+      if (!pool.length) return null;
       pool.sort(function (a, b) { return (S.seen[a.id] || 0) - (S.seen[b.id] || 0); });
       pool = pool.slice(0, Math.max(3, Math.ceil(pool.length / 3)));
     }
@@ -402,7 +405,14 @@
   var SIM_MAT = ['m_num', 'm_ops', 'm_ops', 'm_frac', 'm_seq', 'm_loc', 'm_solidos', 'm_graf'];
   function buildSim() {
     var used = S.simUsed.slice(), qs = [];
-    function take(t, d, opt) { var q = pickQuestion(t, d, Object.assign({ exclude: used.concat(qs.map(function (x) { return x.id; })), recent: 0 }, opt || {})); qs.push(q); }
+    function take(t, d, opt) {
+      var mine = qs.map(function (x) { return x.id; });
+      var tries = [t].concat(TOPIC_BY_ID[t].s === 'por' ? ['p_gram', 'p_interp', 'p_contexto', 'p_pont', 'p_silabas'] : ['m_ops', 'm_num', 'm_frac']);
+      for (var i = 0; i < tries.length; i++) {
+        var q = pickQuestion(tries[i], d, Object.assign({ exclude: used.concat(mine), hard: mine, recent: 0 }, opt || {}));
+        if (q && mine.indexOf(q.id) < 0) { qs.push(q); return; }
+      }
+    }
     // Português: um texto com 3 questões + 7 avulsas
     var txts = Object.keys(PASSAGES), usedTxt = {};
     S.sims.forEach(function (s) { (s.txts || []).forEach(function (x) { usedTxt[x] = (usedTxt[x] || 0) + 1; }); });
@@ -415,7 +425,7 @@
     porT.forEach(function (t, i) { take(t, [1, 2, 3, 2, 2][i], { noTxt: true }); });
     // completa até 10 de Português
     var extra = shuffle(['p_pont', 'p_silabas', 'p_imagem', 'p_interp', 'p_gram']);
-    var k = 0; while (qs.length < 10) take(extra[k++ % extra.length], 2, { noTxt: true });
+    var k = 0; while (qs.length < 10 && k < 40) take(extra[k++ % extra.length], 2, { noTxt: true });
     // Matemática
     var md = shuffle([1, 1, 2, 2, 2, 2, 3, 3, 3, 2]);
     SIM_MAT.forEach(function (t, i) { take(t, md[i]); });
